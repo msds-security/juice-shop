@@ -72,8 +72,8 @@ The `/ftp` directory was browsed and the following files were downloaded into [`
 
 ---
 
-## 📦 File Reference Index
-
+## 📦 File Reference(Sensitive) 
+Extracted files from the victim as  follows:
 | Path                                          | Purpose                                                           |
 | --------------------------------------------- | ----------------------------------------------------------------- |
 | [`ftp_loot/`](ftp_loot/)                      | All downloaded sensitive files from `/ftp`                        |
