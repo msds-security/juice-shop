@@ -8,7 +8,7 @@ pipeline {
         DEPLOYMENT_NAME    = 'juice-shop'
         AWS_ACCOUNT_ID     = '562517367791'
         ECR_REPO           = 'juice-shop'
-        ECR_REGISTRY       = "562517367791.dkr.ecr.us-east-2.amazonaws.com"
+        ECR_REGISTRY       = '562517367791.dkr.ecr.us-east-2.amazonaws.com'
         IMAGE_TAG          = "${BUILD_NUMBER}"
         GIT_REPO           = 'https://github.com/msds-security/juice-shop'
     }
@@ -24,6 +24,8 @@ pipeline {
                     kubectl version --client
                     echo "--- Docker ---"
                     docker --version
+                    echo "--- Wiz CLI ---"
+                    wizcli version
                     echo "--- AWS Identity ---"
                     aws sts get-caller-identity
                 '''
@@ -34,6 +36,32 @@ pipeline {
             steps {
                 git branch: 'main',
                     url: "${GIT_REPO}"
+            }
+        }
+
+        stage('Wiz IaC Scan') {
+            steps {
+                sh '''
+                    echo "Running Wiz IaC scan on source code..."
+                    wizcli iac scan \
+                        --client-id ${WIZ_CLIENT_ID} \
+                        --client-secret ${WIZ_CLIENT_SECRET} \
+                        --path . \
+                        --format human || true
+                '''
+            }
+        }
+
+        stage('Wiz Source Code Scan') {
+            steps {
+                sh '''
+                    echo "Running Wiz source code and secrets scan..."
+                    wizcli dir scan \
+                        --client-id ${WIZ_CLIENT_ID} \
+                        --client-secret ${WIZ_CLIENT_SECRET} \
+                        --path . \
+                        --format human || true
+                '''
             }
         }
 
@@ -64,6 +92,19 @@ pipeline {
             }
         }
 
+        stage('Wiz Image Scan') {
+            steps {
+                sh '''
+                    echo "Running Wiz container image scan..."
+                    wizcli scan container-image \
+                        --client-id ${WIZ_CLIENT_ID} \
+                        --client-secret ${WIZ_CLIENT_SECRET} \
+                        --image ${ECR_REPO}:${IMAGE_TAG} \
+                        --format human || true
+                '''
+            }
+        }
+
         stage('Push to ECR') {
             steps {
                 sh '''
@@ -73,7 +114,6 @@ pipeline {
                     docker login \
                         --username AWS \
                         --password-stdin ${ECR_REGISTRY}
-
                     echo "Pushing image to ECR..."
                     docker push ${ECR_REGISTRY}/${ECR_REPO}:${IMAGE_TAG}
                     docker push ${ECR_REGISTRY}/${ECR_REPO}:latest
@@ -174,7 +214,7 @@ pipeline {
 
     post {
         success {
-            echo '✅ Build, push, and deploy to juice-shop-cluster in us-east-2 succeeded!'
+            echo '✅ Full Wiz-scanned build and deploy to juice-shop-cluster in us-east-2 succeeded!'
         }
         failure {
             echo '❌ Pipeline failed. Check logs above for details.'
