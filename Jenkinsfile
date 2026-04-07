@@ -99,7 +99,7 @@ pipeline {
                     wizcli scan container-image \
                         --client-id ${WIZ_CLIENT_ID} \
                         --client-secret ${WIZ_CLIENT_SECRET} \
-                        --image ${ECR_REPO}:${IMAGE_TAG} \
+                        ${ECR_REPO}:${IMAGE_TAG} \
                         --format human || true
                 '''
             }
