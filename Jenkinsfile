@@ -39,13 +39,17 @@ pipeline {
 
         stage('Wiz IaC Scan') {
             steps {
-                wizcli allowFailure: true, cli: 'iac scan --path . --stdout human'
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    wizcli 'iac scan --path . --stdout human'
+                }
             }
         }
 
         stage('Wiz Source Code Scan') {
             steps {
-                wizcli allowFailure: true, cli: 'dir scan --path . --stdout human'
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    wizcli 'dir scan --path . --stdout human'
+                }
             }
         }
 
@@ -78,7 +82,9 @@ pipeline {
 
         stage('Wiz Image Scan') {
             steps {
-                wizcli allowFailure: true, cli: "scan container-image ${ECR_REPO}:${IMAGE_TAG} --stdout human"
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    wizcli "scan container-image ${ECR_REPO}:${IMAGE_TAG} --stdout human"
+                }
             }
         }
 
