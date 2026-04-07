@@ -39,17 +39,13 @@ pipeline {
 
         stage('Wiz IaC Scan') {
             steps {
-                wizcli {
-                    sh 'wizcli iac scan --path . --format human || true'
-                }
+                wizcli 'iac scan --path . --stdout human'
             }
         }
 
         stage('Wiz Source Code Scan') {
             steps {
-                wizcli {
-                    sh 'wizcli dir scan --path . --format human || true'
-                }
+                wizcli 'dir scan --path . --stdout human'
             }
         }
 
@@ -82,9 +78,7 @@ pipeline {
 
         stage('Wiz Image Scan') {
             steps {
-                wizcli {
-                    sh "wizcli scan container-image ${ECR_REPO}:${IMAGE_TAG} --stdout human || true"
-                }
+                wizcli "scan container-image ${ECR_REPO}:${IMAGE_TAG} --stdout human"
             }
         }
 
