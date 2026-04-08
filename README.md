@@ -250,3 +250,4 @@ OWASP Juice Shop and any contributions are Copyright © by Bjoern Kimminich & th
 # Auto CI/CD test6
 # updated Wed Apr  8 03:38:09 PM UTC 2026
 # Auto CI/CD test6
+Updated README
