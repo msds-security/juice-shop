@@ -1,0 +1,95 @@
+// Pipeline: juice-shop-infra
+// Purpose:  Provision / update the EKS cluster and its VPC via Terraform.
+// Jenkins job config: Pipeline script from SCM -> Script Path: infra/Jenkinsfile
+
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    disableConcurrentBuilds()
+    timeout(time: 45, unit: 'MINUTES')
+  }
+
+  parameters {
+    choice(name: 'ACTION', choices: ['plan', 'apply', 'destroy'], description: 'Terraform action')
+    string(name: 'REGION', defaultValue: 'us-east-2', description: 'AWS region')
+  }
+
+  environment {
+    AWS_DEFAULT_REGION = "${params.REGION}"
+    TF_IN_AUTOMATION   = 'true'
+    TF_INPUT           = '0'
+    TF_DIR             = 'infra/terraform'
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
+    }
+
+    stage('Tool versions') {
+      steps {
+        sh 'terraform version && aws --version && aws sts get-caller-identity'
+      }
+    }
+
+    stage('Terraform Init') {
+      steps {
+        dir("${env.TF_DIR}") {
+          sh 'terraform init -upgrade'
+        }
+      }
+    }
+
+    stage('Terraform Validate') {
+      steps {
+        dir("${env.TF_DIR}") {
+          sh 'terraform validate'
+        }
+      }
+    }
+
+    stage('Terraform Plan') {
+      when { anyOf { expression { params.ACTION == 'plan' }; expression { params.ACTION == 'apply' } } }
+      steps {
+        dir("${env.TF_DIR}") {
+          sh 'terraform plan -out=tfplan -var region=${AWS_DEFAULT_REGION}'
+        }
+      }
+    }
+
+    stage('Approval') {
+      when { anyOf { expression { params.ACTION == 'apply' }; expression { params.ACTION == 'destroy' } } }
+      steps {
+        input message: "Proceed with terraform ${params.ACTION}?", ok: 'Run it'
+      }
+    }
+
+    stage('Terraform Apply') {
+      when { expression { params.ACTION == 'apply' } }
+      steps {
+        dir("${env.TF_DIR}") {
+          sh 'terraform apply -auto-approve tfplan'
+          sh 'terraform output'
+        }
+      }
+    }
+
+    stage('Terraform Destroy') {
+      when { expression { params.ACTION == 'destroy' } }
+      steps {
+        dir("${env.TF_DIR}") {
+          sh 'terraform destroy -auto-approve -var region=${AWS_DEFAULT_REGION}'
+        }
+      }
+    }
+  }
+
+  post {
+    success { echo "Terraform ${params.ACTION} completed successfully." }
+    failure { echo "Terraform ${params.ACTION} FAILED. Check logs above." }
+  }
+}
