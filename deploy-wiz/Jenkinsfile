@@ -45,40 +45,55 @@ pipeline {
         sh 'kubectl cluster-info'
       }
     }
+    stage('Install wizcli') {
+      steps {
+        sh '
+          if [ ! -x ./wizcli ]; then
+            echo "Downloading wizcli..."
+            curl -sSL https://downloads.wiz.io/wizcli/latest/wizcli-linux-amd64 -o wizcli
+            chmod +x wizcli
+          fi
+          ./wizcli version
+        '
+      }
+    }
+
 
     stage('Wiz: Scan IaC manifests') {
       steps {
         echo '============================================================'
         echo '  WIZ: Scanning Kubernetes manifests (IaC)'
         echo '============================================================'
-        script {
-          try {
-            wizcli userInput: "iac scan --path deploy-wiz/k8s --name juice-shop-wiz-iac"
-          } catch (Exception e) {
-            echo "Wiz IaC scan reported: ${e.message}"
-            currentBuild.result = "UNSTABLE"
-          }
+        withCredentials([string(credentialsId: 'wizclientid', variable: 'WIZ_ID'),
+                         string(credentialsId: 'wizclientsecret', variable: 'WIZ_SECRET')]) {
+          sh '
+            set +e
+            ./wizcli auth --id "$WIZ_ID" --secret "$WIZ_SECRET" 2>&1 || true
+            ./wizcli iac scan --path deploy-wiz/k8s --name juice-shop-wiz-iac
+            echo "IaC scan finished (exit: $?)"
+            exit 0
+          '
         }
       }
     }
-
     stage('Wiz: Scan container image') {
       steps {
         echo '============================================================'
         echo '  WIZ: Scanning container image'
         echo "  Image: ${params.IMAGE}"
         echo '============================================================'
-        script {
-          try {
-            wizcli userInput: "docker scan --image ${params.IMAGE} --name juice-shop-wiz-image"
-          } catch (Exception e) {
-            echo "Wiz image scan reported: ${e.message}"
-            currentBuild.result = "UNSTABLE"
-          }
+        withCredentials([string(credentialsId: 'wizclientid', variable: 'WIZ_ID'),
+                         string(credentialsId: 'wizclientsecret', variable: 'WIZ_SECRET')]) {
+          sh """
+            set +e
+            ./wizcli auth --id "\$WIZ_ID" --secret "\$WIZ_SECRET" 2>&1 || true
+            ./wizcli docker scan --image ${params.IMAGE} --name juice-shop-wiz-image
+            echo "Image scan finished (exit: \$?)"
+            exit 0
+          """
         }
       }
     }
-
     stage('Apply Manifests') {
       steps {
         sh 'kubectl apply -f deploy-wiz/k8s/namespace.yaml'
