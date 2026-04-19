@@ -1,0 +1,71 @@
+// Pipeline: juice-shop-delete
+// Purpose:  Remove the Juice Shop app (namespace, deployment, service) from EKS.
+//           Leaves the cluster itself untouched.
+// Jenkins job config: Pipeline script from SCM -> Script Path: deploy/Jenkinsfile-delete
+
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    disableConcurrentBuilds()
+    timeout(time: 10, unit: 'MINUTES')
+  }
+
+  parameters {
+    string(name: 'CLUSTER_NAME', defaultValue: 'juice-shop-cluster', description: 'EKS cluster name')
+    string(name: 'REGION',       defaultValue: 'us-east-2',          description: 'AWS region')
+    string(name: 'NAMESPACE',    defaultValue: 'juice-shop',         description: 'Kubernetes namespace')
+  }
+
+  environment {
+    AWS_DEFAULT_REGION = "${params.REGION}"
+    KUBECONFIG         = "${WORKSPACE}/.kube/config"
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
+    }
+
+    stage('Tool versions') {
+      steps {
+        sh 'aws --version && kubectl version --client=true && aws sts get-caller-identity'
+      }
+    }
+
+    stage('Connect to EKS') {
+      steps {
+        sh 'mkdir -p "$(dirname \"$KUBECONFIG\")"'
+        sh 'aws eks update-kubeconfig --name "${CLUSTER_NAME}" --region "${AWS_DEFAULT_REGION}" --kubeconfig "$KUBECONFIG"'
+        sh 'kubectl cluster-info'
+      }
+    }
+
+    stage('Show what will be deleted') {
+      steps {
+        sh 'kubectl -n "${NAMESPACE}" get all || true'
+      }
+    }
+
+    stage('Delete Service first') {
+      steps {
+        sh 'kubectl -n "${NAMESPACE}" delete svc juice-shop --ignore-not-found --wait=true'
+        sh 'sleep 30'
+      }
+    }
+
+    stage('Delete namespace') {
+      steps {
+        sh 'kubectl delete namespace "${NAMESPACE}" --ignore-not-found --wait=true --timeout=5m'
+      }
+    }
+  }
+
+  post {
+    success { echo "Juice Shop app removed. Cluster still running." }
+    failure { echo "Delete FAILED. Check stages above." }
+  }
+}
