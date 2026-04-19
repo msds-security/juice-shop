@@ -51,8 +51,13 @@ pipeline {
         echo '============================================================'
         echo '  WIZ: Scanning Kubernetes manifests (IaC)'
         echo '============================================================'
-        catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-          wizcli userInput: 'iac scan --path deploy-wiz/k8s --name juice-shop-wiz-iac'
+        script {
+          try {
+            wizcli userInput: "iac scan --path deploy-wiz/k8s --name juice-shop-wiz-iac"
+          } catch (Exception e) {
+            echo "Wiz IaC scan reported: ${e.message}"
+            currentBuild.result = "UNSTABLE"
+          }
         }
       }
     }
@@ -63,8 +68,13 @@ pipeline {
         echo '  WIZ: Scanning container image'
         echo "  Image: ${params.IMAGE}"
         echo '============================================================'
-        catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-          wizcli userInput: "docker scan --image ${params.IMAGE} --name juice-shop-wiz-image"
+        script {
+          try {
+            wizcli userInput: "docker scan --image ${params.IMAGE} --name juice-shop-wiz-image"
+          } catch (Exception e) {
+            echo "Wiz image scan reported: ${e.message}"
+            currentBuild.result = "UNSTABLE"
+          }
         }
       }
     }
