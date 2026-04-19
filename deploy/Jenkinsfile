@@ -61,7 +61,16 @@ pipeline {
 
     stage('Show service endpoint') {
       steps {
-        sh 'sleep 60 && kubectl -n "${NAMESPACE}" get svc juice-shop'
+        sh """
+          sleep 60
+          kubectl -n \"\${NAMESPACE}\" get svc juice-shop
+          URL=\$(kubectl -n \"\${NAMESPACE}\" get svc juice-shop -o jsonpath="{.status.loadBalancer.ingress[0].hostname}")
+          echo ""
+          echo "============================================================"
+          echo "  JUICE SHOP IS LIVE:"
+          echo "  http://\${URL}"
+          echo "============================================================"
+        """
       }
     }
   }
