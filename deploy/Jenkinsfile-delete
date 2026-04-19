@@ -59,9 +59,10 @@ pipeline {
 
     stage('Delete namespace') {
       steps {
-        sh 'kubectl delete namespace "${NAMESPACE}" --ignore-not-found --wait=true --timeout=5m'
+        sh 'chmod +x deploy/scripts/delete-namespace.sh && deploy/scripts/delete-namespace.sh "${NAMESPACE}"'
       }
     }
+
   }
 
   post {
