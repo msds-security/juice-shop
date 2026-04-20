@@ -87,7 +87,7 @@ pipeline {
           sh """
             set +e
             ./wizcli auth --id "\$WIZ_ID" --secret "\$WIZ_SECRET" 2>&1 || true
-            ./wizcli docker scan --image ${params.IMAGE} --name juice-shop-wiz-image
+            ./wizcli docker scan --image ${params.IMAGE}
             echo "Image scan finished (exit: \$?)"
             exit 0
           """
