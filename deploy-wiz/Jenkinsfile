@@ -87,6 +87,7 @@ pipeline {
           sh """
             set +e
             ./wizcli auth --id "\$WIZ_ID" --secret "\$WIZ_SECRET" 2>&1 || true
+            docker pull ${params.IMAGE}
             ./wizcli docker scan --image ${params.IMAGE}
             echo "Image scan finished (exit: \$?)"
             exit 0
