@@ -47,14 +47,14 @@ pipeline {
     }
     stage('Install wizcli') {
       steps {
-        sh '
+        sh '''
           if [ ! -x ./wizcli ]; then
             echo "Downloading wizcli..."
             curl -sSL https://downloads.wiz.io/wizcli/latest/wizcli-linux-amd64 -o wizcli
             chmod +x wizcli
           fi
           ./wizcli version
-        '
+        '''
       }
     }
 
@@ -66,13 +66,13 @@ pipeline {
         echo '============================================================'
         withCredentials([string(credentialsId: 'wizclientid', variable: 'WIZ_ID'),
                          string(credentialsId: 'wizclientsecret', variable: 'WIZ_SECRET')]) {
-          sh '
+          sh '''
             set +e
             ./wizcli auth --id "$WIZ_ID" --secret "$WIZ_SECRET" 2>&1 || true
             ./wizcli iac scan --path deploy-wiz/k8s --name juice-shop-wiz-iac
             echo "IaC scan finished (exit: $?)"
             exit 0
-          '
+          '''
         }
       }
     }
