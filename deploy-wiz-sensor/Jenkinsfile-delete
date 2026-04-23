@@ -70,7 +70,7 @@ pipeline {
     stage('Delete namespace (optional)') {
       when { expression { return params.DELETE_NAMESPACE } }
       steps {
-        sh 'kubectl delete namespace "$WIZ_NAMESPACE" --ignore-not-found --wait=true --timeout=3m || true'
+        sh 'chmod +x deploy-wiz-sensor/scripts/delete-namespace.sh && deploy-wiz-sensor/scripts/delete-namespace.sh "$WIZ_NAMESPACE"'
       }
     }
 
