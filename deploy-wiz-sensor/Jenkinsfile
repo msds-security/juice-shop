@@ -70,6 +70,8 @@ pipeline {
         echo '  WIZ: Installing Runtime Sensor (eBPF DaemonSet)'
         echo '============================================================'
         withCredentials([string(credentialsId: 'wizclient', variable: 'WIZ_ID'),
+                         string(credentialsId: 'wizpulluser', variable: 'WIZ_PULL_USER'),
+                         string(credentialsId: 'wizpullpass', variable: 'WIZ_PULL_PASS'),
                          string(credentialsId: 'wizsecret', variable: 'WIZ_SECRET')]) {
           sh '''
             set -e
@@ -84,6 +86,9 @@ pipeline {
               --values deploy-wiz-sensor/helm/sensor-values.yaml \
               --set wizApiToken.clientId="$WIZ_ID" \
               --set wizApiToken.clientToken="$WIZ_SECRET" \
+              --set imagePullSecret.create=true \
+              --set imagePullSecret.username="$WIZ_PULL_USER" \
+              --set imagePullSecret.password="$WIZ_PULL_PASS" \
               --wait \
               --timeout 10m
           '''
