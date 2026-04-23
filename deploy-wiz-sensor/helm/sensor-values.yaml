@@ -1,0 +1,38 @@
+# Wiz Kubernetes Runtime Sensor - Helm values
+#
+# DaemonSet - one pod per node - uses eBPF to observe syscalls and container
+# activity. Requires privileged access and hostPID.
+#
+# Chart reference: https://github.com/wiz-sec/charts/tree/master/wiz-sensor
+# Secrets (clientId/clientToken) are injected from the Jenkinsfile via --set.
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 1Gi
+
+# Tolerate every taint so the sensor schedules on ALL nodes (control plane,
+# GPU, spot, tainted node pools). Without this you get runtime blind spots.
+tolerations:
+  - operator: Exists
+    effect: NoSchedule
+  - operator: Exists
+    effect: NoExecute
+  - operator: Exists
+    effect: PreferNoSchedule
+
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxUnavailable: 1
+
+# system-node-critical prevents eviction under node pressure - important for
+# runtime visibility when it matters most.
+priorityClassName: system-node-critical
+
+commonLabels:
+  app.kubernetes.io/part-of: juice-shop-wiz-sensor
+  deployed-by: jenkins

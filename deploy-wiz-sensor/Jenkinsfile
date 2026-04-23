@@ -1,0 +1,149 @@
+// Pipeline: juice-shop-deploy-wiz-sensor
+// Purpose:  Install the Wiz Runtime Sensor (eBPF DaemonSet) on juice-shop-cluster.
+//           One pod per node, monitoring syscalls + process activity.
+//           KAC intentionally NOT installed - simpler, no webhook/cert-manager.
+
+pipeline {
+  agent any
+
+  options {
+    timestamps()
+    disableConcurrentBuilds()
+    timeout(time: 15, unit: 'MINUTES')
+  }
+
+  parameters {
+    string(name: 'CLUSTER_NAME',   defaultValue: 'juice-shop-cluster', description: 'EKS cluster name')
+    string(name: 'REGION',         defaultValue: 'us-east-2',          description: 'AWS region')
+    string(name: 'WIZ_NAMESPACE',  defaultValue: 'wiz',                description: 'K8s namespace for the sensor')
+    string(name: 'SENSOR_VERSION', defaultValue: '',                   description: 'Pin sensor chart version (blank = latest)')
+  }
+
+  environment {
+    AWS_DEFAULT_REGION = "${params.REGION}"
+    KUBECONFIG         = "${WORKSPACE}/.kube/config"
+  }
+
+  stages {
+    stage('Checkout') {
+      steps {
+        checkout scm
+      }
+    }
+
+    stage('Tool versions') {
+      steps {
+        sh 'aws --version && kubectl version --client=true && helm version --short && aws sts get-caller-identity'
+      }
+    }
+
+    stage('Connect to EKS') {
+      steps {
+        sh 'mkdir -p "$(dirname \"$KUBECONFIG\")"'
+        sh 'aws eks update-kubeconfig --name "${CLUSTER_NAME}" --region "${AWS_DEFAULT_REGION}" --kubeconfig "$KUBECONFIG"'
+        sh 'kubectl cluster-info'
+        sh 'kubectl get nodes'
+      }
+    }
+
+    stage('Add Wiz Helm repo') {
+      steps {
+        sh '''
+          helm repo add wiz-sec https://wiz-sec.github.io/charts || helm repo add --force-update wiz-sec https://wiz-sec.github.io/charts
+          helm repo update wiz-sec
+          echo "---"
+          helm search repo wiz-sec/wiz-sensor
+        '''
+      }
+    }
+
+    stage('Ensure namespace') {
+      steps {
+        sh 'kubectl create namespace "${WIZ_NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -'
+        sh 'kubectl get namespace "${WIZ_NAMESPACE}"'
+      }
+    }
+
+    stage('Install/upgrade Wiz Runtime Sensor (DaemonSet)') {
+      steps {
+        echo '============================================================'
+        echo '  WIZ: Installing Runtime Sensor (eBPF DaemonSet)'
+        echo '============================================================'
+        withCredentials([string(credentialsId: 'wizclient', variable: 'WIZ_ID'),
+                         string(credentialsId: 'wizsecret', variable: 'WIZ_SECRET')]) {
+          sh '''
+            set -e
+            VERSION_FLAG=""
+            if [ -n "$SENSOR_VERSION" ]; then
+              VERSION_FLAG="--version $SENSOR_VERSION"
+            fi
+
+            helm upgrade --install wiz-sensor wiz-sec/wiz-sensor \
+              --namespace "$WIZ_NAMESPACE" \
+              $VERSION_FLAG \
+              --values deploy-wiz-sensor/helm/sensor-values.yaml \
+              --set wizApiToken.clientId="$WIZ_ID" \
+              --set wizApiToken.clientToken="$WIZ_SECRET" \
+              --wait \
+              --timeout 10m
+          '''
+        }
+      }
+    }
+
+    stage('Wait for rollout') {
+      steps {
+        sh '''
+          echo "Waiting for wiz-sensor DaemonSet to roll out on all nodes..."
+          kubectl -n "$WIZ_NAMESPACE" rollout status daemonset -l app.kubernetes.io/name=wiz-sensor --timeout=5m || true
+        '''
+      }
+    }
+
+    stage('Verify deployment') {
+      steps {
+        sh '''
+          echo "============================================================"
+          echo "  WIZ SENSOR - DEPLOYMENT STATE"
+          echo "============================================================"
+          echo ""
+          echo "--- Helm releases in $WIZ_NAMESPACE ---"
+          helm -n "$WIZ_NAMESPACE" list
+          echo ""
+          echo "--- DaemonSet ---"
+          kubectl -n "$WIZ_NAMESPACE" get daemonset
+          echo ""
+          echo "--- Sensor pods (one per node) ---"
+          kubectl -n "$WIZ_NAMESPACE" get pods -l app.kubernetes.io/name=wiz-sensor -o wide
+          echo ""
+          echo "--- Node vs sensor pod count ---"
+          NODES=$(kubectl get nodes --no-headers | wc -l)
+          PODS=$(kubectl -n "$WIZ_NAMESPACE" get pods -l app.kubernetes.io/name=wiz-sensor --no-headers 2>/dev/null | wc -l)
+          echo "Nodes: $NODES | Sensor pods: $PODS"
+          if [ "$NODES" = "$PODS" ]; then
+            echo "Full node coverage confirmed."
+          else
+            echo "WARNING: sensor pod count does not match node count."
+          fi
+        '''
+      }
+    }
+  }
+
+  post {
+    success {
+      echo "Wiz Runtime Sensor deployed successfully."
+      echo "Check Wiz console Fleet view in 2-3 minutes to confirm Sensor coverage."
+    }
+    failure {
+      echo "Pipeline FAILED. Check stages above."
+      sh '''
+        echo "--- Recent events in $WIZ_NAMESPACE ---"
+        kubectl -n "$WIZ_NAMESPACE" get events --sort-by=.lastTimestamp 2>&1 | tail -30 || true
+        echo ""
+        echo "--- Sensor pod logs ---"
+        kubectl -n "$WIZ_NAMESPACE" logs -l app.kubernetes.io/name=wiz-sensor --tail=50 --all-containers 2>&1 | tail -50 || true
+      '''
+    }
+  }
+}
