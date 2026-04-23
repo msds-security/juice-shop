@@ -15,7 +15,7 @@ pipeline {
     string(name: 'CLUSTER_NAME',  defaultValue: 'juice-shop-cluster', description: 'EKS cluster name')
     string(name: 'REGION',        defaultValue: 'us-east-2',          description: 'AWS region')
     string(name: 'WIZ_NAMESPACE', defaultValue: 'wiz',                description: 'K8s namespace with the sensor')
-    booleanParam(name: 'DELETE_NAMESPACE', defaultValue: false, description: 'Also delete the wiz namespace')
+    booleanParam(name: 'DELETE_NAMESPACE', defaultValue: true, description: 'Also delete the wiz namespace')
   }
 
   environment {
